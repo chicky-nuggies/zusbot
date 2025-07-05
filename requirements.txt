@@ -1,0 +1,10 @@
+pydantic-ai
+psycopg2
+pgvector
+sqlalchemy
+
+# For backend
+fastapi
+uvicorn[standard]
+python-dotenv
+python-multipart
