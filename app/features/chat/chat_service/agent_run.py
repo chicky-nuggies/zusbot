@@ -10,37 +10,28 @@ from pydantic_ai.settings import ModelSettings
 import sys
 import os
 # Add parent directory to path to import from root
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.database import Database
 from app.embedding import Embeddings
-from ..config import config
+from app.config import config
+
+from .agent_tools import AgentTools
 
 
-def log_tool_call(func):
-    """Decorator to log tool calls for debugging"""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        print(f"Tool called: {func.__name__}")
-        print(f"Args: {args}")
-        print(f"Kwargs: {kwargs}")
-        result = func(*args, **kwargs)
-        print(f"Result: {result}")
-        return result
-    return wrapper
-
-
-class ChatService:
-    def __init__(self):
-        # Initialize database and embedding model
-        self.database = Database(config.DB_URL)
-        self.embedding_model = Embeddings(config.AWS_REGION, config.EMBEDDING_MODEL_ID)
+class ChatAgent:
+    def __init__(self, model_id):
         
         # Initialize the Bedrock model
-        self.model = BedrockConverseModel(config.CHAT_MODEL_ID)
+        self.model = BedrockConverseModel(model_id)
         
-        # Model settings for parallel tool calls
-        self.model_settings = ModelSettings(parallel_tool_calls=True)
+        # Initialize database and embedding model
+        self.database = Database(config.DB_URL)
+        self.database.create_tables()  # Ensure tables exist
+        self.embedding_model = Embeddings(config.AWS_REGION, config.EMBEDDING_MODEL_ID)
+        
+        # Initialize agent tools with database and embedding access
+        self.tools = AgentTools(self.database, self.embedding_model)
         
         # System prompt
         self.system_prompt = """
@@ -73,42 +64,14 @@ Be clear, concise, and helpful. Always cite the information retrieved via tools 
             model=self.model,
             system_prompt=self.system_prompt,
             tools=[
-                self.get_products,
-                self.get_outlet,
-                self.addition_calculator,
-                self.multiplication_calculator,
-                self.get_similar_products
+                self.tools.get_products,
+                self.tools.get_outlet,
+                self.tools.addition_calculator,
+                self.tools.multiplication_calculator,
+                self.tools.get_similar_products
             ],
         )
     
-    @log_tool_call
-    def get_products(self):
-        """Gets information about products"""
-        return self.database.get_all_products()
-    
-    @log_tool_call
-    def get_similar_products(self, search_query: str):
-        """Performs a semantic similarity search over Zus Coffee's drinkware catalog"""
-        query_embedding = self.embedding_model.generate_embeddings(search_query)
-        return self.database.search_similar_products(query_embedding, threshold=0)
-    
-    @log_tool_call
-    def get_outlet(self):
-        """Gets information about store outlets"""
-        return {
-            'branch': 'ss2',
-            'operational-hours': '9am-6pm'
-        }
-    
-    @log_tool_call
-    def addition_calculator(self, numbers: list[int]):
-        """Sums up numbers"""
-        return sum(numbers)
-    
-    @log_tool_call
-    def multiplication_calculator(self, num: int, multiplier: int):
-        """Multiplies numbers"""
-        return num * multiplier
     
     async def chat(self, message: str, message_history: Optional[list] = None) -> tuple[str, list]:
         """
@@ -126,7 +89,7 @@ Be clear, concise, and helpful. Always cite the information retrieved via tools 
             result = await self.agent.run(
                 message, 
                 message_history=message_history,
-                model_settings=self.model_settings
+                model_settings=ModelSettings(parallel_tool_calls=True)
             )
             
             # Return response and updated message history

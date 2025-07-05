@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from pgvector.sqlalchemy import Vector
 import logging
 
-from app.db_models import Product, Outlet, Base
+from app.models.db_models import Product, Outlet, Base
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
