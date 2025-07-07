@@ -35,27 +35,27 @@ class ChatAgent:
         
         # System prompt
         self.system_prompt = """
-        You are a helpful assistant for Zus Coffee, a coffee chain. Your role is to answer customer questions *strictly* based on the tools and product data available to you.
+You are a helpful assistant for Zus Coffee, a coffee chain. Your role is to answer customer questions *strictly* based on the tools and product data available to you.
 
-        You are responsible for assisting with:
-        - Product information about drinkwares sold by Zus Coffee (e.g. mugs, tumblers)
-        - Details about coffee outlet locations and their operational hours
+You are responsible for assisting with:
+- Product information about drinkwares sold by Zus Coffee (e.g. mugs, tumblers)
+- Details about coffee outlet locations and their operational hours
 
-        You **do not** have access to information outside of the available product database and outlet information. If a question falls outside this scope, politely let the user know you cannot help.
+You **do not** have access to information outside of the available product database and outlet information. If a question falls outside this scope, politely let the user know you cannot help.
 
-        When performing *any* numerical calculation (e.g. addition, multiplication), you must *always* call the appropriate tool. Do **not** do math in your head or inline in responses.
+When performing *any* numerical calculation (e.g. addition, multiplication), you must *always* call the appropriate tool. Do **not** do math in your head or inline in responses.
 
-        Use:
-        - `multiplication_calculator` for all multiplication (even simple values)
-        - `addition_calculator` for all addition
+Use:
+- `multiplication_calculator` for all multiplication (even simple values)
+- `addition_calculator` for all addition
 
-        You are not allowed to perform arithmetic yourself. Think step-by-step, and *always* delegate calculations to the appropriate tool.
+You are not allowed to perform arithmetic yourself. Think step-by-step, and *always* delegate calculations to the appropriate tool.
 
-        Use `get_products` and `get_similar_products` to retrieve product information about drinkwares.
+Use `get_products` and `get_similar_products` to retrieve product information about drinkwares.
 
-        Use `get_outlet` to get details about outlet branches and their operational hours.
+Use `get_outlet` to get details about outlet branches and their operational hours.
 
-        Be clear, concise, and helpful. Always cite the information retrieved via tools when answering customer questions.
+Be clear, concise, and helpful. Always cite the information retrieved via tools when answering customer questions.
 """
         
         # Initialize the agent
@@ -98,55 +98,3 @@ class ChatAgent:
         except Exception as e:
             print(f"Error in chat service: {e}")
             raise Exception(f"Sorry, I encountered an error while processing your request: {str(e)}")
-
-    async def chat_stream(self, message: str, message_history: Optional[list] = None):
-        """
-        Stream chat response with tool call information.
-        
-        Args:
-            message: User's message
-            message_history: Optional conversation history from previous messages
-            
-        Yields:
-            dict: Stream of information including tool calls and final response
-        """
-        try:
-            # Clear previous tool call information
-            self.tools.clear_tool_call_info()
-            
-            # Yield initial message
-            yield {"type": "message_start", "message": message}
-            
-            # Run the agent with message history
-            result = await self.agent.run(
-                message, 
-                message_history=message_history,
-                model_settings=ModelSettings(parallel_tool_calls=True)
-            )
-            
-            # Get tool call information
-            tool_calls = self.tools.get_tool_call_info()
-            
-            # Yield tool call information
-            for tool_call in tool_calls:
-                yield {
-                    "type": "tool_call",
-                    "tool_name": tool_call["tool_call"]["tool_called"],
-                    "args": tool_call["tool_call"]["args"],
-                    "kwargs": tool_call["tool_call"]["kwargs"],
-                    "result": tool_call["result"]["result"] if tool_call["result"] else None
-                }
-            
-            # Yield final response
-            yield {
-                "type": "response",
-                "response": str(result.data),
-                "message_history": result.all_messages()
-            }
-            
-        except Exception as e:
-            print(f"Error in chat service: {e}")
-            yield {
-                "type": "error",
-                "error": f"Sorry, I encountered an error while processing your request: {str(e)}"
-            }
