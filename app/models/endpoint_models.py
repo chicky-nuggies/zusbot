@@ -1,15 +1,23 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
 
+class ToolMetadata(BaseModel):
+    tool_name: str
+    tool_kwargs: Dict[str, Any]
+    tool_args: List[Any]
+    generated_sql: Optional[str] = None
+    result: Any
+
 class ChatResponse(BaseModel):
     response: str
     session_id: str
     status: str = "success"
+    tool_calls: Optional[List[ToolMetadata]] = None
 
 class NewSessionResponse(BaseModel):
     session_id: str
@@ -27,6 +35,7 @@ class ChatStreamResponse(BaseModel):
     response: str
     session_id: str
     status: str = "success"
+    tool_calls: Optional[List[ToolMetadata]] = None
 
 class ChatStreamChunk(BaseModel):
     chunk: Optional[str] = None
@@ -34,3 +43,4 @@ class ChatStreamChunk(BaseModel):
     session_id: Optional[str] = None
     message_history: Optional[list] = None
     status: str = "success"
+    tool_calls: Optional[List[ToolMetadata]] = None

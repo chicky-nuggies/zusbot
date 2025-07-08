@@ -41,7 +41,7 @@ async def chat(
             print(f"[CHAT] Using existing session: {session_id}, history length: {len(message_history) if message_history else 0}")
         
         # Get response from chat service
-        response, updated_history = await chat_service.chat(request.message, message_history)
+        response, updated_history, tool_metadata = await chat_service.chat(request.message, message_history)
         
         # Update session with new message history
         session_manager.update_session_history(session_id, updated_history)
@@ -50,7 +50,8 @@ async def chat(
         return ChatResponse(
             response=response,
             session_id=session_id,
-            status="success"
+            status="success",
+            tool_calls=tool_metadata
         )
     
     except Exception as e:
@@ -109,12 +110,14 @@ async def chat_stream(
                     elif 'response' in item:
                         # Final response with complete message
                         updated_history = item['message_history']
+                        tool_calls = item.get('tool_calls', [])
                         
                         final_data = ChatStreamChunk(
                             response=item['response'],
                             session_id=session_id,
                             message_history=updated_history,
-                            status="complete"
+                            status="complete",
+                            tool_calls=tool_calls
                         )
                         yield f"data: {final_data.model_dump_json()}\n\n"
                 
