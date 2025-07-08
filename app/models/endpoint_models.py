@@ -44,3 +44,15 @@ class ChatStreamChunk(BaseModel):
     message_history: Optional[list] = None
     status: str = "success"
     tool_calls: Optional[List[ToolMetadata]] = None
+
+class ProductSummaryRequest(BaseModel):
+    query: str
+    top_k: Optional[int] = 5
+
+class ProductSummaryResponse(BaseModel):
+    query: str
+    summary: str
+    retrieved_products: List[Dict[str, Any]]
+    session_id: str
+    status: str = "success"
+    tool_calls: Optional[List[ToolMetadata]] = None

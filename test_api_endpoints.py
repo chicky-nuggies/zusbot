@@ -80,13 +80,43 @@ def test_chat_stream_endpoint():
         print(f"❌ Stream endpoint test failed: {e}")
         return False
 
+def test_products_endpoint():
+    """Test the /products endpoint with a query about drinkwares"""
+    print("\n🧪 Testing /products endpoint...")
+    
+    url = "http://localhost:8000/api/products"
+    params = {
+        "query": "coffee mugs and tumblers",
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        print(f"✅ Status: {data.get('status')}")
+        print(f"📝 Query: {data.get('query')}")
+        print(f"📊 Retrieved products: {len(data.get('retrieved_products', []))}")
+        print(f"📝 Summary preview: {data.get('summary', '')[:200]}...")
+        
+        for i, product in enumerate(data.get('retrieved_products', []), 1):
+            print(f"  Product {i}: Score {product.get('similarity_score', 0):.3f}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Products endpoint test failed: {e}")
+        return False
+
 if __name__ == "__main__":
     print("🚀 Testing API endpoints...")
     
     success1 = test_chat_endpoint()
     success2 = test_chat_stream_endpoint()
+    success3 = test_products_endpoint()
     
-    if success1 and success2:
+    if success1 and success2 and success3:
         print("\n✅ All API endpoint tests completed successfully!")
     else:
         print("\n❌ Some tests failed!")

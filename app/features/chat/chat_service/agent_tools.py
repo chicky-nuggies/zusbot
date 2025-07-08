@@ -162,7 +162,7 @@ class AgentTools:
     def get_similar_products(self, search_query: str):
         """Performs a semantic similarity search over Zus Coffee's drinkware catalog"""
         query_embedding = self.embedding_model.generate_embeddings(search_query)
-        return self.database.search_similar_products(query_embedding, threshold=0.4)
+        return self.database.search_similar_products(query_embedding, threshold=0.3)
 
     @log_tool_call
     def addition_calculator(self, numbers: list[int]):

@@ -1,6 +1,7 @@
 from __future__ import annotations as _annotations
 
 import functools
+import json
 from typing import Optional, AsyncGenerator, Dict, Any
 
 from pydantic_ai import Agent
@@ -78,6 +79,40 @@ Be clear, concise, and helpful. Always cite the information retrieved via tools 
                 self.tools.get_products,
                 self.tools.get_similar_products,
                 self.tools.query_outlets_table
+            ],
+        )
+        
+        # Create a separate agent for product summarization
+        self.product_summary_agent = Agent(
+            name='product_summary_agent',
+            model=self.model,
+            model_settings=ModelSettings(parallel_tool_calls=True),
+            system_prompt="""
+You are a product information specialist for Zus Coffee. Your role is to help customers find and understand product information about drinkwares sold by Zus Coffee.
+
+IMPORTANT: You must ALWAYS use the `get_similar_products` tool first before providing any product information. You do not have any built-in knowledge about Zus Coffee products.
+
+Your workflow:
+1. FIRST: Always call `get_similar_products` with the user's query to search for relevant products
+2. THEN: Analyze the results from the tool call
+3. FINALLY: Provide a helpful summary based on the retrieved product data
+
+Your responsibilities:
+- Use the `get_similar_products` tool to search for relevant products based on user queries
+- Analyze and summarize product information from the search results
+- Create clear, informative summaries that highlight key features
+- Focus on relevant details like product names, prices, descriptions, materials, and specifications
+- Present information in a customer-friendly manner
+- Be concise but comprehensive in your summaries
+
+NEVER say you don't have information about products. Instead, ALWAYS use the `get_similar_products` tool first to search for relevant products, then provide a summary based on what the tool returns.
+
+If the tool returns no results, then you can say no relevant products were found for the query.
+
+Be helpful and informative, focusing on answering the user's specific question about Zus Coffee drinkware products.
+""",
+            tools=[
+                self.tools.get_similar_products,
             ],
         )
     
@@ -158,3 +193,34 @@ Be clear, concise, and helpful. Always cite the information retrieved via tools 
         except Exception as e:
             print(f"Error in chat service: {e}")
             raise Exception(f"Sorry, I encountered an error while processing your request: {str(e)}")
+    
+    async def product_chat(self, message: str, message_history: Optional[list] = None) -> tuple[str, list, list]:
+        """
+        Process a product-related chat message using the dedicated product summary agent.
+        
+        Args:
+            message: User's message about products
+            message_history: Optional conversation history from previous messages
+            
+        Returns:
+            tuple: (response_text, updated_message_history, tool_calls_metadata)
+        """
+        try:
+            # Clear any previous tool metadata
+            self.tools.tool_calls_metadata.clear()
+            
+            # Run the product summary agent with message history
+            result = await self.product_summary_agent.run(
+                message, 
+                message_history=message_history,
+            )
+            
+            # Get tool metadata
+            tool_metadata = self.tools.get_and_clear_tool_metadata()
+            
+            # Return response, updated message history, and tool metadata
+            return str(result.data), result.all_messages(), tool_metadata
+            
+        except Exception as e:
+            print(f"Error in product chat service: {e}")
+            raise Exception(f"Sorry, I encountered an error while processing your product request: {str(e)}")

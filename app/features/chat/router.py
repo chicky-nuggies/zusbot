@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 import json
 
-from app.models.endpoint_models import ChatRequest, ChatResponse, ChatStreamChunk
+from app.models.endpoint_models import ChatRequest, ChatResponse, ChatStreamChunk, ProductSummaryResponse
 from app.dependencies import get_session_manager, get_chat_service
 from app.features.sessions.session_manager import SessionManager
 from app.features.chat.chat_service.agent_run import ChatAgent
@@ -60,6 +60,65 @@ async def chat(
             status_code=500,
             detail="Sorry, I encountered an error while processing your request."
         )
+
+@router.get("/products", response_model=ProductSummaryResponse)
+async def get_products_summary(
+    query: str = Query(..., description="User question about products"),
+    session_manager: SessionManager = Depends(get_session_manager),
+    chat_service: ChatAgent = Depends(get_chat_service)
+):
+    """
+    Product summary endpoint that uses a dedicated product agent to search for and summarize
+    relevant products based on user queries. The agent uses tools to retrieve products and
+    generates an AI summary.
+    """
+    try:
+        if not query.strip():
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+        
+        # Clean up old sessions periodically
+        session_manager.cleanup_old_sessions()
+        
+        # For products endpoint, we'll use a simple session management
+        # You could extend this to support session_id as a query parameter if needed
+        session_id = session_manager.create_session()
+        
+        # Use the dedicated product chat agent
+        response, updated_history, tool_metadata = await chat_service.product_chat(query, message_history=None)
+        
+        # Update session with the conversation
+        session_manager.update_session_history(session_id, updated_history)
+        
+        # Extract product information from tool calls for the response
+        retrieved_products = []
+        for tool_call in tool_metadata:
+            if tool_call.get('tool_name') == 'get_similar_products' and isinstance(tool_call.get('result'), list):
+                for product_id, chunk, similarity in tool_call.get('result', []):
+                    product_info = {
+                        "id": product_id,
+                        "content": chunk,
+                        "similarity_score": float(similarity)
+                    }
+                    retrieved_products.append(product_info)
+        
+        return ProductSummaryResponse(
+            query=query,
+            summary=response,
+            retrieved_products=retrieved_products,
+            session_id=session_id,
+            status="success",
+            tool_calls=tool_metadata
+        )
+    
+    except Exception as e:
+        print(f"Error in products endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sorry, I encountered an error while processing your request: {str(e)}"
+        )
+
+
+
 
 @router.post("/chat-stream")
 async def chat_stream(
