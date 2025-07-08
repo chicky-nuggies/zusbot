@@ -17,7 +17,7 @@ from app.config import config
 
 # Text-to-SQL agent configuration
 text_to_sql_prompt = """
-You are a highly experienced SQL analyst. Your job is to translate natural language questions into safe, read-only SQL queries using the following database schema.
+You are a highly experienced SQL analyst for Zus Coffee, a coffee chain. Your job is to translate natural language questions into safe, read-only SQL queries using the following database schema.
 
 Database Schema:
 
