@@ -115,7 +115,47 @@ Be helpful and informative, focusing on answering the user's specific question a
                 self.tools.get_similar_products,
             ],
         )
-    
+        
+        # Create a separate agent for outlet queries
+        self.outlet_query_agent = Agent(
+            name='outlet_query_agent',
+            model=self.model,
+            model_settings=ModelSettings(parallel_tool_calls=True),
+            system_prompt="""
+You are an outlet information specialist for Zus Coffee. Your role is to help customers find information about Zus Coffee outlet locations and details by translating their natural language queries into SQL and executing them.
+
+Database Schema:
+Table: outlet
+- id (Integer, Primary Key): A unique identifier for each outlet
+- name (String, max 255 chars): The name of the outlet
+- address (String, max 500 chars): The physical address of the outlet
+
+Your workflow:
+1. FIRST: Translate the user's natural language query into a safe SQL SELECT query
+2. THEN: Use the `execute_outlets_query` tool to run the SQL query
+3. FINALLY: Present the results in a clear, customer-friendly format
+
+SQL Guidelines:
+- Only generate SELECT queries
+- Use ILIKE for case-insensitive text searches (e.g., WHERE name ILIKE '%mall%')
+- Reference only the columns that exist: id, name, address
+- For partial matches, use ILIKE with % wildcards
+- Order results when appropriate (e.g., ORDER BY name)
+
+Examples of SQL translations:
+- "Find outlets with 'mall' in the name" → SELECT * FROM outlet WHERE name ILIKE '%mall%';
+- "Show all outlets" → SELECT * FROM outlet;
+- "Get outlet addresses" → SELECT name, address FROM outlet;
+- "Find outlets in Kuala Lumpur" → SELECT * FROM outlet WHERE address ILIKE '%Kuala Lumpur%';
+
+Always use the `execute_outlets_query` tool with your generated SQL query, then format the results nicely for the customer.
+
+Be helpful and informative, focusing on answering the user's specific question about Zus Coffee outlet locations.
+""",
+            tools=[
+                self.tools.execute_outlets_query,
+            ],
+        )
     
     async def chat(self, message: str, message_history: Optional[list] = None) -> tuple[str, list, list]:
         """
@@ -224,3 +264,34 @@ Be helpful and informative, focusing on answering the user's specific question a
         except Exception as e:
             print(f"Error in product chat service: {e}")
             raise Exception(f"Sorry, I encountered an error while processing your product request: {str(e)}")
+
+    async def outlet_chat(self, message: str, message_history: Optional[list] = None) -> tuple[str, list, list]:
+        """
+        Process an outlet-related chat message using the dedicated outlet query agent.
+        
+        Args:
+            message: User's message about outlets
+            message_history: Optional conversation history from previous messages
+            
+        Returns:
+            tuple: (response_text, updated_message_history, tool_calls_metadata)
+        """
+        try:
+            # Clear any previous tool metadata
+            self.tools.tool_calls_metadata.clear()
+            
+            # Run the outlet query agent with message history
+            result = await self.outlet_query_agent.run(
+                message, 
+                message_history=message_history,
+            )
+            
+            # Get tool metadata
+            tool_metadata = self.tools.get_and_clear_tool_metadata()
+            
+            # Return response, updated message history, and tool metadata
+            return str(result.data), result.all_messages(), tool_metadata
+            
+        except Exception as e:
+            print(f"Error in outlet chat service: {e}")
+            raise Exception(f"Sorry, I encountered an error while processing your outlet request: {str(e)}")

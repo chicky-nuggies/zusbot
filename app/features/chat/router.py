@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 import json
 
-from app.models.endpoint_models import ChatRequest, ChatResponse, ChatStreamChunk, ProductSummaryResponse
+from app.models.endpoint_models import ChatRequest, ChatResponse, ChatStreamChunk, ProductSummaryResponse, OutletQueryResponse
 from app.dependencies import get_session_manager, get_chat_service
 from app.features.sessions.session_manager import SessionManager
 from app.features.chat.chat_service.agent_run import ChatAgent
@@ -118,6 +118,46 @@ async def get_products_summary(
         )
 
 
+@router.get("/outlets", response_model=OutletQueryResponse)
+async def get_outlets_query(
+    query: str = Query(..., description="Natural language query about outlets"),
+    session_manager: SessionManager = Depends(get_session_manager),
+    chat_service: ChatAgent = Depends(get_chat_service)
+):
+    """
+    Outlet query endpoint that uses a dedicated outlet agent to translate natural language
+    queries to SQL, execute them against the outlets database, and return formatted results.
+    """
+    try:
+        if not query.strip():
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+        
+        # Clean up old sessions periodically
+        session_manager.cleanup_old_sessions()
+        
+        # For outlets endpoint, create a new session
+        session_id = session_manager.create_session()
+        
+        # Use the dedicated outlet chat agent
+        response, updated_history, tool_metadata = await chat_service.outlet_chat(query, message_history=None)
+        
+        # Update session with the conversation
+        session_manager.update_session_history(session_id, updated_history)
+        
+        return OutletQueryResponse(
+            query=query,
+            response=response,
+            session_id=session_id,
+            status="success",
+            tool_calls=tool_metadata
+        )
+    
+    except Exception as e:
+        print(f"Error in outlets endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Sorry, I encountered an error while processing your request: {str(e)}"
+        )
 
 
 @router.post("/chat-stream")

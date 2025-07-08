@@ -174,6 +174,34 @@ class AgentTools:
         """Multiplies numbers"""
         return num * multiplier
 
+    @log_tool_call
+    def execute_outlets_query(self, sql_query: str):
+        """Executes a SQL query directly on the outlets database"""
+        try:
+            # Validate that it's a safe SELECT query
+            sql_query_clean = sql_query.strip()
+            if not sql_query_clean.upper().startswith('SELECT'):
+                return "Error: Only SELECT queries are allowed."
+            
+            # Check for dangerous keywords
+            dangerous_keywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE']
+            sql_upper = sql_query_clean.upper()
+            for keyword in dangerous_keywords:
+                if keyword in sql_upper:
+                    return f"Error: {keyword} operations are not allowed."
+            
+            # Execute the query on the database
+            rows = self.database.execute_query(sql_query_clean)
+            
+            # Convert results to JSON format
+            query_result = json.dumps([dict(row._mapping) for row in rows], indent=2)
+            return query_result
+            
+        except Exception as e:
+            error_msg = f"Error executing query: {str(e)}"
+            print(f"Error in execute_outlets_query: {e}")
+            return error_msg
+
     async def query_outlets_table(self, nl_query: str):
         """Takes Natural Language and performs SQL on a database to query outlet information"""
         try:

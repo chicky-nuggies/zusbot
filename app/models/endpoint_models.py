@@ -56,3 +56,10 @@ class ProductSummaryResponse(BaseModel):
     session_id: str
     status: str = "success"
     tool_calls: Optional[List[ToolMetadata]] = None
+
+class OutletQueryResponse(BaseModel):
+    query: str
+    response: str
+    session_id: str
+    status: str = "success"
+    tool_calls: Optional[List[ToolMetadata]] = None
