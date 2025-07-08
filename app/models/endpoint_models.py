@@ -22,3 +22,15 @@ class SessionStatsResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     message: str
+
+class ChatStreamResponse(BaseModel):
+    response: str
+    session_id: str
+    status: str = "success"
+
+class ChatStreamChunk(BaseModel):
+    chunk: Optional[str] = None
+    response: Optional[str] = None
+    session_id: Optional[str] = None
+    message_history: Optional[list] = None
+    status: str = "success"

@@ -1,7 +1,7 @@
 from __future__ import annotations as _annotations
 
 import functools
-from typing import Optional
+from typing import Optional, AsyncGenerator, Dict, Any
 
 from pydantic_ai import Agent
 from pydantic_ai.models.bedrock import BedrockConverseModel
@@ -62,6 +62,7 @@ Be clear, concise, and helpful. Always cite the information retrieved via tools 
         self.agent = Agent(
             name='zus_coffee_assistant',
             model=self.model,
+            model_settings=ModelSettings(parallel_tool_calls=True),
             system_prompt=self.system_prompt,
             tools=[
                 self.tools.get_products,
@@ -89,11 +90,49 @@ Be clear, concise, and helpful. Always cite the information retrieved via tools 
             result = await self.agent.run(
                 message, 
                 message_history=message_history,
-                model_settings=ModelSettings(parallel_tool_calls=True)
             )
             
             # Return response and updated message history
             return str(result.data), result.all_messages()
+            
+        except Exception as e:
+            print(f"Error in chat service: {e}")
+            raise Exception(f"Sorry, I encountered an error while processing your request: {str(e)}")
+        
+
+    async def chat_stream(self, message: str, message_history: Optional[list] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Process a chat message and return the agent's response along with updated message history.
+        
+        Args:
+            message: User's message
+            message_history: Optional conversation history from previous messages
+            
+        Returns:
+            tuple: (response_text, updated_message_history)
+        """
+        try:
+            print(f"[AGENT_STREAM] Starting chat_stream with message: '{message[:50]}...' and history length: {len(message_history) if message_history else 0}")
+            
+            async with self.agent.run_stream(
+                message, 
+                message_history=message_history, 
+            ) as response:
+                full_response = ""
+                async for chunk in response.stream_text(delta=True):
+                    # Yield each chunk
+                    yield {'chunk': chunk}
+                    full_response += chunk
+                
+            final_messages = response.all_messages()
+            print(f"[AGENT_STREAM] Stream complete. Full response length: {len(full_response)}, final history length: {len(final_messages)}")
+            
+            yield {
+                'response': full_response,
+                'message_history': final_messages
+            }
+
+
             
         except Exception as e:
             print(f"Error in chat service: {e}")
