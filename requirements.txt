@@ -2,6 +2,7 @@ pydantic-ai
 psycopg2
 pgvector
 sqlalchemy
+boto3
 
 # For backend
 fastapi

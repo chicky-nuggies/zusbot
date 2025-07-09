@@ -6,6 +6,7 @@ from typing import Optional, AsyncGenerator, Dict, Any
 
 from pydantic_ai import Agent
 from pydantic_ai.models.bedrock import BedrockConverseModel
+from pydantic_ai.providers.bedrock import BedrockProvider
 from pydantic_ai.settings import ModelSettings
 
 import sys
@@ -23,13 +24,20 @@ from .agent_tools import AgentTools
 class ChatAgent:
     def __init__(self, model_id):
         
-        # Initialize the Bedrock model
-        self.model = BedrockConverseModel(model_id)
+        # Initialize the Bedrock model with region
+        try:
+            # Create a BedrockProvider with the specific region for Bedrock
+            bedrock_provider = BedrockProvider(region_name=config.BEDROCK_REGION)
+            self.model = BedrockConverseModel(model_id, provider=bedrock_provider)
+        except Exception as e:
+            print(f"Error initializing Bedrock model: {e}")
+            print(f"Make sure AWS credentials are configured and AWS_REGION is set to: {config.AWS_REGION}")
+            raise e
         
         # Initialize database and embedding model
         self.database = Database(config.DB_URL)
         self.database.create_tables()  # Ensure tables exist
-        self.embedding_model = Embeddings(config.AWS_REGION, config.EMBEDDING_MODEL_ID)
+        self.embedding_model = Embeddings(config.BEDROCK_REGION, config.EMBEDDING_MODEL_ID)
         
         # Initialize agent tools with database and embedding access
         self.tools = AgentTools(self.database, self.embedding_model)
@@ -189,51 +197,6 @@ Be helpful and informative, focusing on answering the user's specific question a
             raise Exception(f"Sorry, I encountered an error while processing your request: {str(e)}")
         
 
-    async def chat_stream(self, message: str, message_history: Optional[list] = None) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Process a chat message and return the agent's response along with updated message history and tool metadata.
-        
-        Args:
-            message: User's message
-            message_history: Optional conversation history from previous messages
-            
-        Returns:
-            AsyncGenerator yielding chunks and final response with tool metadata
-        """
-        try:
-            print(f"[AGENT_STREAM] Starting chat_stream with message: '{message[:50]}...' and history length: {len(message_history) if message_history else 0}")
-            
-            # Clear any previous tool metadata
-            self.tools.tool_calls_metadata.clear()
-            
-            async with self.agent.run_stream(
-                message, 
-                message_history=message_history, 
-            ) as response:
-                full_response = ""
-                async for chunk in response.stream_text(delta=True):
-                    # Yield each chunk
-                    yield {'chunk': chunk}
-                    full_response += chunk
-                
-            final_messages = response.all_messages()
-            
-            # Get tool metadata
-            tool_metadata = self.tools.get_and_clear_tool_metadata()
-            
-            print(f"[AGENT_STREAM] Stream complete. Full response length: {len(full_response)}, final history length: {len(final_messages)}, tool calls: {len(tool_metadata)}")
-            
-            yield {
-                'response': full_response,
-                'message_history': final_messages,
-                'tool_calls': tool_metadata
-            }
-
-            
-        except Exception as e:
-            print(f"Error in chat service: {e}")
-            raise Exception(f"Sorry, I encountered an error while processing your request: {str(e)}")
-    
     async def product_chat(self, message: str, message_history: Optional[list] = None) -> tuple[str, list, list]:
         """
         Process a product-related chat message using the dedicated product summary agent.

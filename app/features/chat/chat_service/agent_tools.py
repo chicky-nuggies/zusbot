@@ -12,6 +12,7 @@ from app.database import Database
 from app.embedding import Embeddings
 from pydantic_ai import Agent
 from pydantic_ai.models.bedrock import BedrockConverseModel
+from pydantic_ai.providers.bedrock import BedrockProvider
 from app.config import config
 
 
@@ -140,7 +141,9 @@ class AgentTools:
         self.tool_calls_metadata = []  # Store metadata about tool calls
         
         # Initialize the text-to-SQL agent
-        self.model = BedrockConverseModel(config.CHAT_MODEL_ID)
+        bedrock_provider = BedrockProvider(region_name=config.BEDROCK_REGION)
+
+        self.model = BedrockConverseModel(config.CHAT_MODEL_ID, provider=bedrock_provider)
         self.text_to_sql_agent = Agent(
             name='text_to_sql_agent',
             model=self.model,
@@ -210,17 +213,35 @@ class AgentTools:
             sql_query = result.data
             print(f'Generated SQL query: {sql_query}')
             
-            # Check if the query is safe (should start with SELECT and not be an error)
+            # Check if the AI refused to generate a query
             if sql_query.strip().startswith('--'):
                 query_result = "Cannot generate a safe query for this request."
                 generated_sql = sql_query
             else:
-                # Execute the query on the database
-                rows = self.database.execute_query(sql_query)
-                
-                # Convert results to JSON format
-                query_result = json.dumps([dict(row._mapping) for row in rows], indent=2)
-                generated_sql = sql_query
+                # Apply the same security validation as execute_outlets_query
+                sql_query_clean = sql_query.strip()
+                if not sql_query_clean.upper().startswith('SELECT'):
+                    query_result = "Error: Only SELECT queries are allowed."
+                    generated_sql = sql_query
+                else:
+                    # Check for dangerous keywords
+                    dangerous_keywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE']
+                    sql_upper = sql_query_clean.upper()
+                    dangerous_found = False
+                    for keyword in dangerous_keywords:
+                        if keyword in sql_upper:
+                            query_result = f"Error: {keyword} operations are not allowed."
+                            generated_sql = sql_query
+                            dangerous_found = True
+                            break
+                    
+                    if not dangerous_found:
+                        # Execute the query on the database
+                        rows = self.database.execute_query(sql_query_clean)
+                        
+                        # Convert results to JSON format
+                        query_result = json.dumps([dict(row._mapping) for row in rows], indent=2)
+                        generated_sql = sql_query
             
             # Collect metadata about this tool call with SQL query included
             tool_metadata = {
